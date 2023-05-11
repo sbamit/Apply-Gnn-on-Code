@@ -1,0 +1,12 @@
+DecompiledFuncs/*
+test/*
+codebert_model/*
+__pycache__/
+codebert/__pycache__/
+*.py[cod]
+*$py.class
+*.dot 
+out/*
+*.bin
+*.csv
+JSONBinaries/*
