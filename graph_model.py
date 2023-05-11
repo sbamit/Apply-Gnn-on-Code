@@ -6,10 +6,10 @@ from dgl.nn.pytorch import GATConv, GraphConv
 import dgl
 from sklearn.metrics import PrecisionRecallDisplay, precision_recall_curve
 #
-import losses as svdloss
-import ml as ml
-import rank_eval as svdr
-import gnnexplainer as lvdgne
+import helpers.losses as svdloss
+import helpers.ml as ml
+import helpers.rank_eval as svdr
+import helpers.gnnexplainer as lvdgne
 
 class LitGNN(pl.LightningModule):
     """Main Trainer."""
