@@ -181,7 +181,7 @@ model = LitCodebert()
 data = BigVulDatasetNLPDataModule(BigVulDatasetNLP, batch_size=64)
 checkpoint_callback = pl.callbacks.ModelCheckpoint(monitor="val_loss")
 trainer = pl.Trainer(
-    gpus=1,
+    # gpus=1,
     auto_lr_find=True,
     default_root_dir=savepath,
     num_sanity_val_steps=0,
@@ -190,26 +190,3 @@ trainer = pl.Trainer(
 tuned = trainer.tune(model, data)
 trainer.fit(model, data)
 trainer.test(model, data)
-
-# import sastvd.helpers.ml as ml
-# from tqdm import tqdm
-
-# run_id = "202108191652_2a65b8c_update_default_getitem_bigvul"
-# chkpoint = (
-#     svd.processed_dir()
-#     / f"codebert/{run_id}/lightning_logs/version_0/checkpoints/epoch=188-step=18900.ckpt"
-# )
-# model = LitCodebert.load_from_checkpoint(chkpoint)
-# model.cuda()
-# all_pred = torch.empty((0, 2)).long().cuda()
-# all_true = torch.empty((0)).long().cuda()
-# for batch in tqdm(data.test_dataloader()):
-#     ids, att_mask, labels = batch
-#     ids = ids.cuda()
-#     att_mask = att_mask.cuda()
-#     labels = labels.cuda()
-#     with torch.no_grad():
-#         logits = F.softmax(model(ids, att_mask), dim=1)
-#     all_pred = torch.cat([all_pred, logits])
-#     all_true = torch.cat([all_true, labels])
-# ml.get_metrics_logits(all_true, all_pred)

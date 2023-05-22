@@ -224,15 +224,16 @@ class GNNExplainerLit(pl.LightningModule):
 
 def get_node_importances(model, g):
     """Assign node importance scores to DGL graph based on GNNExplainer."""
-    gnne = GNNExplainerLit(model.cuda(), g.to("cuda"))
+    gnne = GNNExplainerLit(model, g.to("cpu"))
     trainer = pl.Trainer(
-        gpus=1, max_epochs=20, default_root_dir="/tmp/", log_every_n_steps=1
+        # gpus=1, 
+        max_epochs=20, default_root_dir="/tmp/", log_every_n_steps=1
     )
     trainer.fit(gnne)
     edge_weights = gnne.explainer.edge_mask.sigmoid().detach()
     # Get Aggregate weight importances into nodes
-    g.ndata["line_importance"] = th.ones(g.number_of_nodes(), device="cuda") * 2
-    g.edata["edge_mask"] = edge_weights.cuda()
+    g.ndata["line_importance"] = th.ones(g.number_of_nodes(), device="cpu") * 2
+    g.edata["edge_mask"] = edge_weights.cpu()
     g.update_all(
         dgl.function.u_mul_e("line_importance", "edge_mask", "m"),
         dgl.function.mean("m", "line_importance"),

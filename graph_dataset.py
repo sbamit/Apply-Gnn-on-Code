@@ -9,7 +9,6 @@ from tqdm import tqdm
 import codebert as cb
 import create_nodes_and_edges as svdj
 from dgl.dataloading import GraphDataLoader
-# 
 # from dgl.data.utils import load_graphs, save_graphs
 # from torchmetrics import MatthewsCorrCoef
 
@@ -95,7 +94,7 @@ class BigVulDatasetLineVDDataModule(pl.LightningDataModule):
 
     def __init__(
         self,
-        batch_size: int = 32,
+        batch_size: int = 8,
         sample: int = -1,
         methodlevel: bool = False,
         nsampling: bool = False,
@@ -120,18 +119,21 @@ class BigVulDatasetLineVDDataModule(pl.LightningDataModule):
             os.chdir(folder)
             file_list = [file for file in os.listdir() if file.endswith(".c")]
             for filename in file_list:
-                code, lineno, ei, eo, ntypes, etypes = feature_extraction(
-                    filename)
+                code, lineno, ei, eo, ntypes, etypes = feature_extraction(filename)
+                label = [1 if (n == 'int' or n == 'double' or n == 'float' or n == 'uint' or n == 'long')
+                         else 0 for n in ntypes]
+                
                 g = dgl.graph((eo, ei))
-
                 code = [c.replace("\\t", "").replace("\\n", "") for c in code]
                 chunked_batches = chunks(code, 128)
                 features = [codebert.encode(c).detach().cpu() for c in chunked_batches]
                 g.ndata["_CODEBERT"] = th.cat(features)
                 g.ndata["_RANDFEAT"] = th.rand(size=(g.number_of_nodes(), 100))
                 g.ndata["_LINE"] = th.Tensor(lineno).int()
-                g.ndata["_LABEL"] = th.Tensor(ntypes).int()
-                g.edata["_TYPE"] = th.Tensor(etypes).int()
+                g.ndata["_TYPE"] = th.Tensor(ntypes).int()
+                g.edata["_ETYPE"] = th.Tensor(etypes).int()
+                
+                g.ndata["_LABEL"] = th.Tensor(label).int()
                 g = dgl.add_self_loop(g)
                 # save_graphs(str(savedir), [g])
                 self.g_list.append(g)
@@ -141,15 +143,12 @@ class BigVulDatasetLineVDDataModule(pl.LightningDataModule):
         os.chdir(svdj.proj_dir)
       
         # Train Test Split
-        self.train, self.test = train_test_split(self.g_list, test_size=0.2, shuffle=True)
+        self.train, self.test = train_test_split(self.g_list, test_size=0.1, shuffle=True)
+        self.train, self.val = train_test_split(self.train, test_size=0.1, shuffle=True)
         print("\n\ng_train:", self.train)
         print("\n\ng_test:", self.test)
-        """self.train.cache_codebert_method_level(codebert)
-        self.val.cache_codebert_method_level(codebert)
-        self.test.cache_codebert_method_level(codebert)
-        self.train.cache_items(codebert)
-        self.val.cache_items(codebert)
-        self.test.cache_items(codebert)"""
+        print("\n\ng_val:", self.val, "\n\n")
+
         self.batch_size = batch_size
         self.nsampling = nsampling
         self.nsampling_hops = nsampling_hops
@@ -173,20 +172,18 @@ class BigVulDatasetLineVDDataModule(pl.LightningDataModule):
             g = next(iter(GraphDataLoader(self.train, batch_size=len(self.train))))
             return self.node_dl(g, shuffle=True)
         return GraphDataLoader(self.train, shuffle=True, batch_size=self.batch_size)
-    
+        
     def test_dataloader(self):
         """Return test dataloader."""
-        return GraphDataLoader(self.test, batch_size=32)
+        return GraphDataLoader(self.test, batch_size=self.batch_size)
 
-    # def val_dataloader(self):
+    def val_dataloader(self):
         """Return val dataloader."""
         if self.nsampling:
             g = next(iter(GraphDataLoader(self.val, batch_size=len(self.val))))
             return self.node_dl(g)
         return GraphDataLoader(self.val, batch_size=self.batch_size)
 
-    # def val_graph_dataloader(self):
+    def val_graph_dataloader(self):
         """Return test dataloader."""
         return GraphDataLoader(self.val, batch_size=32)
-
-    

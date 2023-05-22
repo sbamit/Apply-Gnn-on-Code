@@ -2,14 +2,15 @@ import pytorch_lightning as pl
 import torch as th
 import torch.nn.functional as F
 import torchmetrics
-from dgl.nn.pytorch import GATConv, GraphConv
+from dgl.nn.pytorch import GATConv
+# from dgl.nn.pytorch GraphConv
 import dgl
 from sklearn.metrics import PrecisionRecallDisplay, precision_recall_curve
-#
-import helpers.losses as svdloss
+# import helpers.losses as svdloss
 import helpers.ml as ml
 import helpers.rank_eval as svdr
 import helpers.gnnexplainer as lvdgne
+
 
 class LitGNN(pl.LightningModule):
     """Main Trainer."""
@@ -41,25 +42,15 @@ class LitGNN(pl.LightningModule):
         self.save_hyperparameters()
 
         # Set params based on embedding type
-        if self.hparams.embtype == "codebert":
-            self.hparams.embfeat = 768
-            self.EMBED = "_CODEBERT"
-        if self.hparams.embtype == "glove":
-            self.hparams.embfeat = 200
-            self.EMBED = "_GLOVE"
-        if self.hparams.embtype == "doc2vec":
-            self.hparams.embfeat = 300
-            self.EMBED = "_DOC2VEC"
+        # if self.hparams.embtype == "codebert":
+        self.hparams.embfeat = 768
+        self.EMBED = "_CODEBERT"
 
         # Loss
-        if self.hparams.loss == "sce":
-            self.loss = svdloss.SCELoss(self.hparams.scea, 1 - self.hparams.scea)
-            self.loss_f = th.nn.CrossEntropyLoss()
-        else:
-            self.loss = th.nn.CrossEntropyLoss(
-                weight=th.Tensor([1, self.hparams.stmtweight]).cuda()
-            )
-            self.loss_f = th.nn.CrossEntropyLoss()
+        self.loss = th.nn.CrossEntropyLoss(
+            weight=th.Tensor([1, self.hparams.stmtweight]).cpu()
+        )
+        self.loss_f = th.nn.CrossEntropyLoss()
 
         # Metrics
         self.accuracy = torchmetrics.Accuracy('binary')
@@ -72,37 +63,24 @@ class LitGNN(pl.LightningModule):
         numheads = self.hparams.num_heads
         embfeat = self.hparams.embfeat
         gnn_args = {"out_feats": hfeat}
-        if self.hparams.gnntype == "gat":
-            gnn = GATConv
-            gat_args = {"num_heads": numheads, "feat_drop": gatdrop}
-            gnn1_args = {**gnn_args, **gat_args, "in_feats": embfeat}
-            gnn2_args = {**gnn_args, **gat_args, "in_feats": hfeat * numheads}
-        elif self.hparams.gnntype == "gcn":
+        # if self.hparams.gnntype == "gat":
+        gnn = GATConv
+        gat_args = {"num_heads": numheads, "feat_drop": gatdrop}
+        gnn1_args = {**gnn_args, **gat_args, "in_feats": embfeat}
+        gnn2_args = {**gnn_args, **gat_args, "in_feats": hfeat * numheads}
+        """elif self.hparams.gnntype == "gcn":
             gnn = GraphConv
             gnn1_args = {"in_feats": embfeat, **gnn_args}
-            gnn2_args = {"in_feats": hfeat, **gnn_args}
+            gnn2_args = {"in_feats": hfeat, **gnn_args}"""
 
         # model: gat2layer
-        if "gat" in self.hparams.model:
-            self.gat = gnn(**gnn1_args)
-            self.gat2 = gnn(**gnn2_args)
-            fcin = hfeat * numheads if self.hparams.gnntype == "gat" else hfeat
-            self.fc = th.nn.Linear(fcin, self.hparams.hfeat)
-            self.fconly = th.nn.Linear(embfeat, self.hparams.hfeat)
-            self.mlpdropout = th.nn.Dropout(self.hparams.mlpdropout)
-
-        # model: mlp-only
-        if "mlponly" in self.hparams.model:
-            self.fconly = th.nn.Linear(embfeat, self.hparams.hfeat)
-            self.mlpdropout = th.nn.Dropout(self.hparams.mlpdropout)
-
-        # model: contains femb
-        if "+femb" in self.hparams.model:
-            self.fc_femb = th.nn.Linear(embfeat * 2, self.hparams.hfeat)
-
-        # self.resrgat = ResRGAT(hdim=768, rdim=1, numlayers=1, dropout=0)
-        # self.gcn = GraphConv(embfeat, hfeat)
-        # self.gcn2 = GraphConv(hfeat, hfeat)
+        # if "gat" in self.hparams.model:
+        self.gat = gnn(**gnn1_args)
+        self.gat2 = gnn(**gnn2_args)
+        fcin = hfeat * numheads if self.hparams.gnntype == "gat" else hfeat
+        self.fc = th.nn.Linear(fcin, self.hparams.hfeat)
+        self.fconly = th.nn.Linear(embfeat, self.hparams.hfeat)
+        self.mlpdropout = th.nn.Dropout(self.hparams.mlpdropout)
 
         # Transform codebert embedding
         self.codebertfc = th.nn.Linear(768, self.hparams.hfeat)
@@ -125,7 +103,7 @@ class LitGNN(pl.LightningModule):
         """
         if self.hparams.nsampling and not test:
             hdst = g[2][-1].dstdata[self.EMBED]
-            h_func = g[2][-1].dstdata["_FUNC_EMB"]
+            # h_func = g[2][-1].dstdata["_FUNC_EMB"]
             g2 = g[2][1]
             g = g[2][0]
             if "gat2layer" in self.hparams.model:
@@ -137,22 +115,16 @@ class LitGNN(pl.LightningModule):
             h = g.ndata[self.EMBED]
             if len(feat_override) > 0:
                 h = g.ndata[feat_override]
-            h_func = g.ndata["_FUNC_EMB"]
+            # h_func = g.ndata["_FUNC_EMB"]
             hdst = h
 
         if self.random:
-            return th.rand((h.shape[0], 2)).to(self.device), th.rand(
-                h_func.shape[0], 2
-            ).to(self.device)
-
-        # model: contains femb
-        if "+femb" in self.hparams.model:
-            h = th.cat([h, h_func], dim=1)
-            h = F.elu(self.fc_femb(h))
+            return th.rand((h.shape[0], 2)).to(self.device) 
+            # th.rand(h_func.shape[0], 2).to(self.device)
 
         # Transform h_func if wrong size
-        if self.hparams.embfeat != 768:
-            h_func = self.codebertfc(h_func)
+        """if self.hparams.embfeat != 768:
+            h_func = self.codebertfc(h_func)"""
 
         # model: gat2layer
         if "gat" in self.hparams.model:
@@ -168,36 +140,21 @@ class LitGNN(pl.LightningModule):
                 if self.hparams.gnntype == "gat":
                     h = h.view(-1, h.size(1) * h.size(2))
             h = self.mlpdropout(F.elu(self.fc(h)))
-            h_func = self.mlpdropout(F.elu(self.fconly(h_func)))
-
-        # Edge masking (for GNNExplainer)
-        if test and len(e_weights) > 0:
-            g.ndata["h"] = h
-            g.edata["ew"] = e_weights
-            g.update_all(
-                dgl.function.u_mul_e("h", "ew", "m"), dgl.function.mean("m", "h")
-            )
-            h = g.ndata["h"]
-
-        # model: mlp-only
-        if "mlponly" in self.hparams.model:
-            h = self.mlpdropout(F.elu(self.fconly(hdst)))
-            h_func = self.mlpdropout(F.elu(self.fconly(h_func)))
+            # h_func = self.mlpdropout(F.elu(self.fconly(h_func)))
 
         # Hidden layers
         for idx, hlayer in enumerate(self.hidden):
             h = self.hdropout(F.elu(hlayer(h)))
-            h_func = self.hdropout(F.elu(hlayer(h_func)))
+            # h_func = self.hdropout(F.elu(hlayer(h_func)))
         h = self.fc2(h)
-        h_func = self.fc2(
-            h_func
-        )  # Share weights between method-level and statement-level tasks
+        # h_func = self.fc2(h_func)  
+        # Share weights between method-level and statement-level tasks
 
-        if self.hparams.methodlevel:
+        """if self.hparams.methodlevel:
             g.ndata["h"] = h
             return dgl.mean_nodes(g, "h"), None
-        else:
-            return h, h_func  # Return two values for multitask training
+        else:"""
+        return h, None  # Return two values for multitask training
 
     def shared_step(self, batch, test=False):
         """Shared step."""
@@ -205,16 +162,16 @@ class LitGNN(pl.LightningModule):
         if self.hparams.methodlevel:
             if self.hparams.nsampling:
                 raise ValueError("Cannot train on method level with nsampling.")
-            labels = dgl.max_nodes(batch, "_VULN").long()
-            labels_func = None
+            labels = dgl.max_nodes(batch, "_LABEL").long()
+            # labels_func = None
         else:
             if self.hparams.nsampling and not test:
-                labels = batch[2][-1].dstdata["_VULN"].long()
-                labels_func = batch[2][-1].dstdata["_FVULN"].long()
+                labels = batch[2][-1].dstdata["_LABEL"].long()
+                # labels_func = batch[2][-1].dstdata["_FVULN"].long()
             else:
-                labels = batch.ndata["_VULN"].long()
-                labels_func = batch.ndata["_FVULN"].long()
-        return logits, labels, labels_func
+                labels = batch.ndata["_LABEL"].long()
+                # labels_func = batch.ndata["_FVULN"].long()
+        return logits, labels, None
 
     def training_step(self, batch, batch_idx):
         """Training step."""
@@ -223,30 +180,33 @@ class LitGNN(pl.LightningModule):
         )  # Labels func should be the method-level label for statements
         # print(logits.argmax(1), labels_func)
         loss1 = self.loss(logits[0], labels)
-        if not self.hparams.methodlevel:
-            loss2 = self.loss_f(logits[1], labels_func)
+        """if not self.hparams.methodlevel:
+            loss2 = self.loss_f(logits[1], labels_func)"""
         # Need some way of combining the losses for multitask training
         loss = 0
         if "line" in self.hparams.multitask:
             loss1 = self.loss(logits[0], labels)
             loss += loss1
-        if "method" in self.hparams.multitask and not self.hparams.methodlevel:
+        """if "method" in self.hparams.multitask and not self.hparams.methodlevel:
             loss2 = self.loss(logits[1], labels_func)
-            loss += loss2
+            loss += loss2"""
 
         logits = logits[1] if self.hparams.multitask == "method" else logits[0]
         pred = F.softmax(logits, dim=1)
         acc = self.accuracy(pred.argmax(1), labels)
-        if not self.hparams.methodlevel:
-            acc_func = self.accuracy(logits.argmax(1), labels_func)
+        """if not self.hparams.methodlevel:
+            acc_func = self.accuracy(logits.argmax(1), labels_func)"""
         mcc = self.mcc(pred.argmax(1), labels)
-        # print(pred.argmax(1), labels)
+        print("\nTraining Batch", batch_idx, "\t", "train_loss", loss.detach().numpy(), "\t", "train_acc", acc.numpy())
+        # print("train_loss", loss, end="\t")
+        # print("train_acc", acc, end="\t")
+        print("train_mcc", mcc, end="\t")
 
-        self.log("train_loss", loss, on_epoch=True, prog_bar=True, logger=True)
-        self.log("train_acc", acc, prog_bar=True, logger=True)
-        if not self.hparams.methodlevel:
-            self.log("train_acc_func", acc_func, prog_bar=True, logger=True)
-        self.log("train_mcc", mcc, prog_bar=True, logger=True)
+        # self.log("train_loss", loss, on_epoch=True, prog_bar=True, logger=True)
+        # self.log("train_acc", acc, prog_bar=True, logger=True)
+        """if not self.hparams.methodlevel:
+            self.log("train_acc_func", acc_func, prog_bar=True, logger=True)"""
+        # self.log("train_mcc", mcc, prog_bar=True, logger=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -256,20 +216,21 @@ class LitGNN(pl.LightningModule):
         if "line" in self.hparams.multitask:
             loss1 = self.loss(logits[0], labels)
             loss += loss1
-        if "method" in self.hparams.multitask:
+        """if "method" in self.hparams.multitask:
             loss2 = self.loss_f(logits[1], labels_func)
-            loss += loss2
+            loss += loss2"""
 
         logits = logits[1] if self.hparams.multitask == "method" else logits[0]
         pred = F.softmax(logits, dim=1)
         acc = self.accuracy(pred.argmax(1), labels)
         mcc = self.mcc(pred.argmax(1), labels)
 
-        self.log("val_loss", loss, on_step=True, prog_bar=True, logger=True)
+        print("\nValidating Batch", batch_idx, "\t", "val_acc", acc.numpy())
+        # self.log("val_loss", loss, on_step=True, prog_bar=True, logger=True)
         self.auroc.update(logits[:, 1], labels)
-        self.log("val_auroc", self.auroc, prog_bar=True, logger=True)
-        self.log("val_acc", acc, prog_bar=True, logger=True)
-        self.log("val_mcc", mcc, prog_bar=True, logger=True)
+        # self.log("val_auroc", self.auroc, prog_bar=True, logger=True)
+        # self.log("val_acc", acc, prog_bar=True, logger=True)
+        # self.log("val_mcc", mcc, prog_bar=True, logger=True)
         return loss
 
     def test_step(self, batch, batch_idx):
@@ -283,130 +244,25 @@ class LitGNN(pl.LightningModule):
             return logits[0], labels_f, dgl.unbatch(batch)
 
         batch.ndata["pred"] = F.softmax(logits[0], dim=1)
-        batch.ndata["pred_func"] = F.softmax(logits[1], dim=1)
-        logits_f = []
-        labels_f = []
+        # batch.ndata["pred_func"] = F.softmax(logits[1], dim=1)
+        # logits_f = []
+        # labels_f = []
         preds = []
         for i in dgl.unbatch(batch):
             preds.append(
                 [
                     list(i.ndata["pred"].detach().cpu().numpy()),
-                    list(i.ndata["_VULN"].detach().cpu().numpy()),
-                    i.ndata["pred_func"].argmax(1).detach().cpu(),
+                    list(i.ndata["_LABEL"].detach().cpu().numpy()),
+                    # i.ndata["pred_func"].argmax(1).detach().cpu(),
                     list(i.ndata["_LINE"].detach().cpu().numpy()),
                 ]
             )
-            logits_f.append(dgl.mean_nodes(i, "pred_func").detach().cpu())
-            labels_f.append(dgl.mean_nodes(i, "_FVULN").detach().cpu())
-        return [logits[0], logits_f], [labels, labels_f], preds
-
-    def test_epoch_end(self, outputs):
-        """Calculate metrics for whole test set."""
-        all_pred = th.empty((0, 2)).long().cuda()
-        all_true = th.empty((0)).long().cuda()
-        all_pred_f = []
-        all_true_f = []
-        all_funcs = []
-        from importlib import reload
-
-        reload(lvdgne)
-        reload(ml)
-        if self.hparams.methodlevel:
-            for out in outputs:
-                all_pred_f += out[0]
-                all_true_f += out[1]
-                for idx, g in enumerate(out[2]):
-                    all_true = th.cat([all_true, g.ndata["_VULN"]])
-                    gnnelogits = th.zeros((g.number_of_nodes(), 2), device="cuda")
-                    gnnelogits[:, 0] = 1
-                    if out[1][idx] == 1:
-                        zeros = th.zeros(g.number_of_nodes(), device="cuda")
-                        importance = th.ones(g.number_of_nodes(), device="cuda")
-                        try:
-                            if out[1][idx] == 1:
-                                importance = lvdgne.get_node_importances(self, g)
-                            importance = importance.unsqueeze(1)
-                            gnnelogits = th.cat([zeros.unsqueeze(1), importance], dim=1)
-                        except Exception as E:
-                            print(E)
-                            pass
-                    all_pred = th.cat([all_pred, gnnelogits])
-                    func_pred = out[0][idx].argmax().repeat(g.number_of_nodes())
-                    all_funcs.append(
-                        [
-                            gnnelogits.detach().cpu().numpy(),
-                            g.ndata["_VULN"].detach().cpu().numpy(),
-                            func_pred.detach().cpu(),
-                        ]
-                    )
-            all_true = all_true.long()
-        else:
-            for out in outputs:
-                all_pred = th.cat([all_pred, out[0][0]])
-                all_true = th.cat([all_true, out[1][0]])
-                all_pred_f += out[0][1]
-                all_true_f += out[1][1]
-                all_funcs += out[2]
-        all_pred = F.softmax(all_pred, dim=1)
-        all_pred_f = F.softmax(th.stack(all_pred_f).squeeze(), dim=1)
-        all_true_f = th.stack(all_true_f).squeeze().long()
-        self.all_funcs = all_funcs
-        self.all_true = all_true
-        self.all_pred = all_pred
-        self.all_pred_f = all_pred_f
-        self.all_true_f = all_true_f
-
-        # Custom ranked accuracy (inc negatives)
-        # self.res1 = ivde.eval_statements_list(all_funcs)
-
-        # Custom ranked accuracy (only positives)
-        # self.res1vo = ivde.eval_statements_list(all_funcs, vo=True, thresh=0)
-
-        # Regular metrics
-        multitask_pred = []
-        multitask_true = []
-        for af in all_funcs:
-            line_pred = list(zip(af[0], af[2]))
-            multitask_pred += [list(i[0]) if i[1] == 1 else [1, 0] for i in line_pred]
-            multitask_true += list(af[1])
-        self.linevd_pred = multitask_pred
-        self.linevd_true = multitask_true
-        multitask_true = th.LongTensor(multitask_true)
-        multitask_pred = th.Tensor(multitask_pred)
-        self.f1thresh = ml.best_f1(multitask_true, [i[1] for i in multitask_pred])
-        self.res2mt = ml.get_metrics_logits(multitask_true, multitask_pred)
-        self.res2 = ml.get_metrics_logits(all_true, all_pred)
-        self.res2f = ml.get_metrics_logits(all_true_f, all_pred_f)
-
-        # Ranked metrics
-        rank_metrs = []
-        rank_metrs_vo = []
-        for af in all_funcs:
-            rank_metr_calc = svdr.rank_metr([i[1] for i in af[0]], af[1], 0)
-            if max(af[1]) > 0:
-                rank_metrs_vo.append(rank_metr_calc)
-            rank_metrs.append(rank_metr_calc)
-        try:
-            self.res3 = ml.dict_mean(rank_metrs)
-        except Exception as E:
-            print(E)
-            pass
-        self.res3vo = ml.dict_mean(rank_metrs_vo)
-
-        # Method level prediction from statement level
-        method_level_pred = []
-        method_level_true = []
-        for af in all_funcs:
-            method_level_true.append(1 if sum(af[1]) > 0 else 0)
-            pred_method = 0
-            for logit in af[0]:
-                if logit[1] > 0.5:
-                    pred_method = 1
-                    break
-            method_level_pred.append(pred_method)
-        self.res4 = ml.get_metrics(method_level_true, method_level_pred)
-
-        return
+        loss = self.loss(logits[0], labels)
+        print("\nTesting Batch", batch_idx, '\tLoss',  loss.detach().numpy())
+        # logits_f.append(dgl.mean_nodes(i, "pred_func").detach().cpu())
+        # labels_f.append(dgl.mean_nodes(i, "_FVULN").detach().cpu())
+        # return [logits[0], logits_f], [labels, labels_f], preds
+        return logits[0], labels, preds
 
     def plot_pr_curve(self):
         """Plot Precision-Recall Curve for Positive Class (after test)."""

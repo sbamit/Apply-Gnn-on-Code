@@ -231,7 +231,7 @@ class LogWriter:
 
     def load_best_model(self):
         """Load best model."""
-        torch.cuda.empty_cache()
+        torch.empty_cache()
         self._model.load_state_dict(torch.load(self._path / "best.model"))
 
     def save_logger(self):
@@ -247,5 +247,5 @@ class LogWriter:
             attrs = pkl.load(f)
             for k, v in attrs.items():
                 setattr(self, k, v)
-        torch.cuda.empty_cache()
+        torch.empty_cache()
         self._model.load_state_dict(torch.load(self._path / "current.model"))
