@@ -21,7 +21,9 @@ def main():
         print(f"[*] Master Directory set as {master_dir}")
 
     # Load data and model
-    data = gd.BigVulDatasetLineVDDataModule(master_dir=master_dir)
+    data = gd.DglGraphDataset(
+        master_dir=master_dir,
+        batch_size=8)
     model = gm.LitGNN()
     # Train model
     # checkpoint_callback = pl.callbacks.ModelCheckpoint(monitor="val_loss")
