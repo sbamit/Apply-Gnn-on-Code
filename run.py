@@ -4,7 +4,9 @@ import os
 import graph_dataset as gd
 import graph_model as gm
 import pytorch_lightning as pl
-from ray.tune.integration.pytorch_lightning import (TuneReportCallback, TuneReportCheckpointCallback)
+import warnings
+from ray.tune.integration.pytorch_lightning import (
+    TuneReportCallback, TuneReportCheckpointCallback)
 
 
 def main():
@@ -68,4 +70,7 @@ def main():
 
 # proj_dir = os.getcwd()     
 if __name__ == "__main__": 
+    warnings.filterwarnings("ignore", ".*does not have many workers.*")
+    warnings.filterwarnings("ignore", ".*smaller than the logging interval.*")
+    warnings.filterwarnings("ignore", ".*TypedStorage is deprecated.*")
     main()

@@ -40,7 +40,9 @@ class LitGNN(pl.LightningModule):
         self.lr = lr
         self.random = random
         self.save_hyperparameters()
-
+        self.training_step_outputs = []
+        self.validation_step_outputs = []
+        self.test_step_outputs = []
         # Set params based on embedding type
         # if self.hparams.embtype == "codebert":
         self.hparams.embfeat = 768
@@ -196,18 +198,28 @@ class LitGNN(pl.LightningModule):
         acc = self.accuracy(pred.argmax(1), labels)
         """if not self.hparams.methodlevel:
             acc_func = self.accuracy(logits.argmax(1), labels_func)"""
-        mcc = self.mcc(pred.argmax(1), labels)
-        print("\nTraining Batch", batch_idx, "\t", "train_loss", loss.detach().numpy(), "\t", "train_acc", acc.numpy())
-        # print("train_loss", loss, end="\t")
-        # print("train_acc", acc, end="\t")
-        print("train_mcc", mcc, end="\t")
-
+        """mcc = self.mcc(pred.argmax(1), labels)
+        print("train_mcc", mcc, end="\t")"""
+        # print("\nTraining Batch", batch_idx, "\t", "train_loss", loss.detach().numpy(), "\t", "train_acc", acc.numpy())
+        batch_dictionary = {"train_loss": loss,
+                            "train_acc": acc
+                            }
+        self.training_step_outputs.append(batch_dictionary)
         # self.log("train_loss", loss, on_epoch=True, prog_bar=True, logger=True)
         # self.log("train_acc", acc, prog_bar=True, logger=True)
         """if not self.hparams.methodlevel:
             self.log("train_acc_func", acc_func, prog_bar=True, logger=True)"""
         # self.log("train_mcc", mcc, prog_bar=True, logger=True)
         return loss
+
+    def on_train_epoch_end(self):
+        outputs = self.training_step_outputs
+        batch_losses = [x['train_loss'] for x in outputs]
+        epoch_loss = th.stack(batch_losses).mean()   # Combine losses
+        epoch_acc = sum([x['train_acc'] for x in outputs])/len(outputs)
+        print("\nTraining accuracy:", epoch_acc.numpy(), end='\t')
+        print("Training loss:", epoch_loss.detach().numpy(), end='\n\n')
+        self.training_step_outputs.clear()  # free memory
 
     def validation_step(self, batch, batch_idx):
         """Validate step."""
@@ -223,15 +235,29 @@ class LitGNN(pl.LightningModule):
         logits = logits[1] if self.hparams.multitask == "method" else logits[0]
         pred = F.softmax(logits, dim=1)
         acc = self.accuracy(pred.argmax(1), labels)
-        mcc = self.mcc(pred.argmax(1), labels)
 
-        print("\nValidating Batch", batch_idx, "\t", "val_acc", acc.numpy())
+        batch_dictionary = {"val_loss": loss,
+                            "val_acc": acc
+                            }
+        self.validation_step_outputs.append(batch_dictionary)
+
+        # print("\nValidating Batch", batch_idx, "\t", "val_acc", acc.numpy())
         # self.log("val_loss", loss, on_step=True, prog_bar=True, logger=True)
         self.auroc.update(logits[:, 1], labels)
         # self.log("val_auroc", self.auroc, prog_bar=True, logger=True)
         # self.log("val_acc", acc, prog_bar=True, logger=True)
+        # mcc = self.mcc(pred.argmax(1), labels)
         # self.log("val_mcc", mcc, prog_bar=True, logger=True)
         return loss
+
+    def on_validation_epoch_end(self):
+        outputs = self.validation_step_outputs
+        batch_losses = [x['val_loss'] for x in outputs]
+        epoch_loss = th.stack(batch_losses).mean()   # Combine losses
+        epoch_acc = sum([x['val_acc'] for x in outputs])/len(outputs)
+        print("\nValidation accuracy : ", epoch_acc.numpy(), end='\t')
+        print("Validation loss : ", epoch_loss.numpy(), end='\n\n')
+        self.validation_step_outputs.clear()  # free memory
 
     def test_step(self, batch, batch_idx):
         """Test step."""
@@ -257,12 +283,29 @@ class LitGNN(pl.LightningModule):
                     list(i.ndata["_LINE"].detach().cpu().numpy()),
                 ]
             )
+
+        pred = F.softmax(logits[0], dim=1)
+        acc = self.accuracy(pred.argmax(1), labels)
         loss = self.loss(logits[0], labels)
-        print("\nTesting Batch", batch_idx, '\tLoss',  loss.detach().numpy())
+        batch_dictionary = {"test_loss": loss,
+                            "test_acc": acc
+                            }
+        self.test_step_outputs.append(batch_dictionary)
+        # print("\nTesting Batch", batch_idx, '\tLoss',  loss.detach().numpy())
         # logits_f.append(dgl.mean_nodes(i, "pred_func").detach().cpu())
         # labels_f.append(dgl.mean_nodes(i, "_FVULN").detach().cpu())
         # return [logits[0], logits_f], [labels, labels_f], preds
         return logits[0], labels, preds
+
+    def on_test_epoch_end(self):
+        outputs = self.test_step_outputs
+        batch_losses = [x['test_loss'] for x in outputs]
+        epoch_loss = th.stack(batch_losses).mean()   # Combine losses
+        epoch_acc = sum([x['test_acc'] for x in outputs])/len(outputs)
+        print("\nTest accuracy : ", epoch_acc.numpy(), end='\t')
+        print("Test loss : ", epoch_loss.numpy(), end='\n\n')
+        self.test_step_outputs.clear()  # free memory
+
 
     def plot_pr_curve(self):
         """Plot Precision-Recall Curve for Positive Class (after test)."""
@@ -276,48 +319,3 @@ class LitGNN(pl.LightningModule):
     def configure_optimizers(self):
         """Configure optimizer."""
         return th.optim.AdamW(self.parameters(), lr=self.lr)
-
-
-def get_relevant_metrics(trial_result):
-    """Get relevant metrics from results."""
-    ret = {}
-    ret["trial_id"] = trial_result[0]
-    ret["checkpoint"] = trial_result[1]
-    ret["acc@5"] = trial_result[2][5]
-    ret["stmt_f1"] = trial_result[3]["f1"]
-    ret["stmt_rec"] = trial_result[3]["rec"]
-    ret["stmt_prec"] = trial_result[3]["prec"]
-    ret["stmt_mcc"] = trial_result[3]["mcc"]
-    ret["stmt_fpr"] = trial_result[3]["fpr"]
-    ret["stmt_fnr"] = trial_result[3]["fnr"]
-    ret["stmt_rocauc"] = trial_result[3]["roc_auc"]
-    ret["stmt_prauc"] = trial_result[3]["pr_auc"]
-    ret["stmt_prauc_pos"] = trial_result[3]["pr_auc_pos"]
-    ret["func_f1"] = trial_result[4]["f1"]
-    ret["func_rec"] = trial_result[4]["rec"]
-    ret["func_prec"] = trial_result[4]["prec"]
-    ret["func_mcc"] = trial_result[4]["mcc"]
-    ret["func_fpr"] = trial_result[4]["fpr"]
-    ret["func_fnr"] = trial_result[4]["fnr"]
-    ret["func_rocauc"] = trial_result[4]["roc_auc"]
-    ret["func_prauc"] = trial_result[4]["pr_auc"]
-    ret["MAP@5"] = trial_result[5]["MAP@5"]
-    ret["nDCG@5"] = trial_result[5]["nDCG@5"]
-    ret["MFR"] = trial_result[5]["MFR"]
-    ret["MAR"] = trial_result[5]["MAR"]
-    ret["stmtline_f1"] = trial_result[6]["f1"]
-    ret["stmtline_rec"] = trial_result[6]["rec"]
-    ret["stmtline_prec"] = trial_result[6]["prec"]
-    ret["stmtline_mcc"] = trial_result[6]["mcc"]
-    ret["stmtline_fpr"] = trial_result[6]["fpr"]
-    ret["stmtline_fnr"] = trial_result[6]["fnr"]
-    ret["stmtline_rocauc"] = trial_result[6]["roc_auc"]
-    ret["stmtline_prauc"] = trial_result[6]["pr_auc"]
-    ret["stmtline_prauc_pos"] = trial_result[6]["pr_auc_pos"]
-
-    ret = {k: round(v, 3) if isinstance(v, float) else v for k, v in ret.items()}
-    ret["learning_rate"] = trial_result[7]
-    ret["stmt_loss"] = trial_result[3]["loss"]
-    ret["func_loss"] = trial_result[4]["loss"]
-    ret["stmtline_loss"] = trial_result[6]["loss"]
-    return ret
