@@ -6,10 +6,6 @@ from dgl.nn.pytorch import GATConv
 # from dgl.nn.pytorch GraphConv
 import dgl
 from sklearn.metrics import PrecisionRecallDisplay, precision_recall_curve
-# import helpers.losses as svdloss
-import helpers.ml as ml
-import helpers.rank_eval as svdr
-import helpers.gnnexplainer as lvdgne
 
 
 class LitGNN(pl.LightningModule):
@@ -305,7 +301,6 @@ class LitGNN(pl.LightningModule):
         print("\nTest accuracy : ", epoch_acc.numpy(), end='\t')
         print("Test loss : ", epoch_loss.numpy(), end='\n\n')
         self.test_step_outputs.clear()  # free memory
-
 
     def plot_pr_curve(self):
         """Plot Precision-Recall Curve for Positive Class (after test)."""

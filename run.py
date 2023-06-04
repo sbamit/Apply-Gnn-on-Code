@@ -2,7 +2,7 @@
 import argparse
 import os
 import graph_dataset as gd
-import graph_model as gm
+import graph_model_simpler as gm_simple
 import pytorch_lightning as pl
 import warnings
 from ray.tune.integration.pytorch_lightning import (
@@ -26,7 +26,7 @@ def main():
     data = gd.DglGraphDataset(
         master_dir=master_dir,
         batch_size=8)
-    model = gm.LitGNN()
+    model = gm_simple.LitGNN()
     # Train model
     # checkpoint_callback = pl.callbacks.ModelCheckpoint(monitor="val_loss")
     # metrics = ["train_loss", "val_loss", "val_auroc"]
@@ -44,31 +44,11 @@ def main():
         max_epochs=max_epochs,
     )
     trainer.fit(model, data)
-    
+
     # test the model
     trainer.test(model, dataloaders=data.test_dataloader())
 
-    """folder_list = [folder for folder in os.listdir(master_dir) if os.path.isdir(os.path.join(master_dir, folder))]
-    folder_list.remove("out") if "out" in folder_list else None
-    os.chdir(master_dir)  # in the master directory
-    # Test get_node_edges function
-    # probably will call this function from outside
-    pd.set_option('display.max_rows', None)
-    for folder in folder_list:
-        os.chdir(folder)
-        file_list = [file for file in os.listdir() if file.endswith(".c")]
-        for filename in file_list:
-            nodes, _ = cnad.get_node_edges(filename)
-            print(nodes.columns)
-            nodes.fillna('<empty>')
-            print(nodes[['id', '_label', 'name', 'code', 'typeFullName',
-                        'controlStructureType', 'node_label']])
-        os.chdir(os.pardir)
-    # Go back to the Project direcotry
-    os.chdir(proj_dir)"""
 
-
-# proj_dir = os.getcwd()     
 if __name__ == "__main__": 
     warnings.filterwarnings("ignore", ".*does not have many workers.*")
     warnings.filterwarnings("ignore", ".*smaller than the logging interval.*")
