@@ -14,13 +14,12 @@ class LitGNN(pl.LightningModule):
         self,
         hfeat: int = 512,
         embfeat: int = -1,  # Keep for legacy purposes
-        lr: float = 1e-3,
+        lr: float = 1e-6,
         hdropout: float = 0.2,
         stmtweight: int = 5,
         mlpdropout: float = 0.2,
-        model: str = "gat2layer",
+        model: str = "gcn2layer",
         nsampling: bool = False,
-        gnntype: str = "gat",
         random: bool = False
     ):
         """Initilisation."""
@@ -45,32 +44,26 @@ class LitGNN(pl.LightningModule):
         # Metrics
         self.accuracy = torchmetrics.Accuracy(task='binary')
         self.auroc = torchmetrics.AUROC(task='binary', compute_on_step=False)
-        self.mcc = torchmetrics.MatthewsCorrCoef(task='binary')
+        # self.mcc = torchmetrics.MatthewsCorrCoef(task='binary')
 
         # GraphConv Type
         hfeat = self.hparams.hfeat
         embfeat = self.hparams.embfeat
-        gnn = GraphConv
-        gnn1_args = {"in_feats": embfeat, "out_feats": hfeat}
-        gnn2_args = {"in_feats": hfeat, "out_feats": hfeat}
+        # gnn = GraphConv
+        # gnn1_args = {"in_feats": embfeat, "out_feats": hfeat}
+        # gnn2_args = {"in_feats": hfeat, "out_feats": hfeat}
 
-        # model: gat2layer
-        self.gat = gnn(**gnn1_args)
-        self.gat2 = gnn(**gnn2_args)
+        # model: gcn2layer
+        self.conv1 = GraphConv(in_feats=embfeat, out_feats=hfeat)  # gnn(**gnn1_args)
+        self.conv2 = GraphConv(in_feats=hfeat, out_feats=hfeat)  # gnn(**gnn2_args)
         fcin = hfeat
         self.fc = th.nn.Linear(fcin, self.hparams.hfeat)
-        self.fconly = th.nn.Linear(embfeat, self.hparams.hfeat)
-        self.mlpdropout = th.nn.Dropout(self.hparams.mlpdropout)
-
-        # Transform codebert embedding
-        self.codebertfc = th.nn.Linear(768, self.hparams.hfeat)
-
-        # Hidden Layers
-        self.fch = []
-        for _ in range(8):
+        # NO Hidden Layers
+        # self.fch = []
+        """for _ in range(4):
             self.fch.append(th.nn.Linear(
                 self.hparams.hfeat, self.hparams.hfeat))
-        self.hidden = th.nn.ModuleList(self.fch)
+        self.hidden = th.nn.ModuleList(self.fch)"""
         self.hdropout = th.nn.Dropout(self.hparams.hdropout)
         self.fc2 = th.nn.Linear(self.hparams.hfeat, 2)
 
@@ -83,13 +76,13 @@ class LitGNN(pl.LightningModule):
         if self.random:
             return th.rand((h.shape[0], 2)).to(self.device)
 
-        # model: gat2layer
-        h = self.gat(g, h)
-        h = self.gat2(g2, h)
-
-        # Hidden layers
-        for _, hlayer in enumerate(self.hidden):
-            h = self.hdropout(F.elu(hlayer(h)))
+        # model: gcn2layer
+        h = self.conv1(g, h)
+        h = self.conv2(g2, h)
+        h = self.hdropout(F.elu(self.fc(h)))
+        # NO Hidden layers
+        """for _, hlayer in enumerate(self.hidden):
+            h = self.hdropout(F.elu(hlayer(h)))"""
         h = self.fc2(h)
 
         return h, None  # Return two values for multitask training
@@ -112,6 +105,7 @@ class LitGNN(pl.LightningModule):
                             "train_acc": acc
                             }
         self.training_step_outputs.append(batch_dictionary)
+        # self.log("train_loss", loss, batch_size=8, on_epoch=True, prog_bar=True, logger=True)
         return loss
 
     def on_train_epoch_end(self):
@@ -135,6 +129,8 @@ class LitGNN(pl.LightningModule):
                             }
         self.validation_step_outputs.append(batch_dictionary)
         self.auroc.update(logits[:, 1], labels)
+        # self.log("val_loss", loss, on_step=True,batch_size=8, prog_bar=True, logger=True)
+        # self.log("val_auroc", self.auroc, batch_size=8, prog_bar=True, logger=True)
         return loss
 
     def on_validation_epoch_end(self):
@@ -142,8 +138,8 @@ class LitGNN(pl.LightningModule):
         batch_losses = [x['val_loss'] for x in outputs]
         epoch_loss = th.stack(batch_losses).mean()   # Combine losses
         epoch_acc = sum([x['val_acc'] for x in outputs])/len(outputs)
-        print("\nValidation accuracy : ", epoch_acc.numpy(), end='\t')
-        print("Validation loss : ", epoch_loss.numpy(), end='\n\n')
+        """print("\nValidation accuracy : ", epoch_acc.numpy(), end='\t')
+        print("Validation loss : ", epoch_loss.numpy(), end='\n\n')"""
         self.validation_step_outputs.clear()  # free memory
 
     def test_step(self, batch, batch_idx):

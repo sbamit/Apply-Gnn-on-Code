@@ -128,10 +128,15 @@ class DglGraphDataset(pl.LightningDataModule):
         # Train Test Split
         self.train, self.test = train_test_split(self.g_list, test_size=0.1, shuffle=True)
         self.train, self.val = train_test_split(self.train, test_size=0.1, shuffle=True)
-        print("\n\ng_train:", self.train)
-        print("\n\ng_test:", self.test)
-        print("\n\ng_val:", self.val, "\n\n")
+        # print("\n\ng_train:", self.train)
+        # print("\n\ng_test:", self.test)
+        # print("\n\ng_val:", self.val, "\n\n")
 
+        # Print # of datapoints
+        print("\nDataset Summary")
+        print("# of training graphs", len(self.train))
+        print("# of validation graphs", len(self.val))
+        print("# of testing graphs", len(self.test))
         self.batch_size = batch_size
         self.nsampling = nsampling
         self.nsampling_hops = nsampling_hops

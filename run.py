@@ -25,8 +25,9 @@ def main():
     # Load data and model
     data = gd.DglGraphDataset(
         master_dir=master_dir,
-        batch_size=8)
+        batch_size=16)
     model = gm_simple.LitGNN()
+    print("\n\nModel Summary\n", model)
     # Train model
     # checkpoint_callback = pl.callbacks.ModelCheckpoint(monitor="val_loss")
     # metrics = ["train_loss", "val_loss", "val_auroc"]
@@ -34,7 +35,6 @@ def main():
     # rtckpt_callback = TuneReportCheckpointCallback(metrics, on="validation_end")
     max_epochs = 10
     savepath = os.curdir
-    # trainer = pl.Trainer(max_epochs=max_epochs)
     trainer = pl.Trainer(
         # gpus=1,
         # auto_lr_find=False,
@@ -45,6 +45,9 @@ def main():
     )
     trainer.fit(model, data)
 
+    # Load Model using Checkpoints
+    # chk_path = "./lightning_logs/version_39/checkpoints/epoch=9-step=2060.ckpt"
+    # model = gm_simple.LitGNN().load_from_checkpoint(chk_path)
     # test the model
     trainer.test(model, dataloaders=data.test_dataloader())
 
