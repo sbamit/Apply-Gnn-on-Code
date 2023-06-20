@@ -91,11 +91,11 @@ class LitGNN(pl.LightningModule):
         """Shared step."""
         logits = self(batch, test)
         labels = batch.ndata["_LABEL"].long()
-        return logits, labels, None
+        return logits, labels
 
     def training_step(self, batch, batch_idx):
         """Training step."""
-        logits, labels, labels_func = self.shared_step(batch)
+        logits, labels = self.shared_step(batch)
         loss = self.loss(logits[0], labels)
         logits = logits[0]
         pred = F.softmax(logits, dim=1)
@@ -119,7 +119,7 @@ class LitGNN(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         """Validate step."""
-        logits, labels, labels_func = self.shared_step(batch)
+        logits, labels = self.shared_step(batch)
         loss = self.loss(logits[0], labels)
         logits = logits[0]
         pred = F.softmax(logits, dim=1)
@@ -138,15 +138,15 @@ class LitGNN(pl.LightningModule):
         batch_losses = [x['val_loss'] for x in outputs]
         epoch_loss = th.stack(batch_losses).mean()   # Combine losses
         epoch_acc = sum([x['val_acc'] for x in outputs])/len(outputs)
-        """print("\nValidation accuracy : ", epoch_acc.numpy(), end='\t')
-        print("Validation loss : ", epoch_loss.numpy(), end='\n\n')"""
+        print("\nValidation accuracy : ", epoch_acc.numpy(), end='\t')
+        print("Validation loss : ", epoch_loss.numpy(), end='\n\n')
         self.validation_step_outputs.clear()  # free memory
 
     def test_step(self, batch, batch_idx):
         """Test step."""
-        logits, labels, _ = self.shared_step(
+        logits, labels = self.shared_step(
             batch, True
-        )  # TODO: Make work for multitask
+        )
 
         batch.ndata["pred"] = F.softmax(logits[0], dim=1)
         preds = []
