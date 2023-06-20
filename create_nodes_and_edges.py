@@ -110,8 +110,8 @@ def get_node_edges(filepath: str, verbose=0):
         nodes = nodes.fillna("")
         try:
             nodes = nodes[
-                ["id", "_label", "name", "code", "lineNumber", "controlStructureType", "typeFullName"]
-            ]
+                ["id", "_label", "name", "code", "lineNumber",
+                 "controlStructureType", "typeFullName"]]
         except Exception as E:
             if verbose > 1:
                 print(f"Failed {filepath}: {E}")

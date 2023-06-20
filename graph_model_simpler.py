@@ -58,12 +58,12 @@ class LitGNN(pl.LightningModule):
         self.conv2 = GraphConv(in_feats=hfeat, out_feats=hfeat)  # gnn(**gnn2_args)
         fcin = hfeat
         self.fc = th.nn.Linear(fcin, self.hparams.hfeat)
-        # NO Hidden Layers
-        # self.fch = []
-        """for _ in range(4):
+        # Hidden Layers
+        self.fch = []
+        for _ in range(4):
             self.fch.append(th.nn.Linear(
                 self.hparams.hfeat, self.hparams.hfeat))
-        self.hidden = th.nn.ModuleList(self.fch)"""
+        self.hidden = th.nn.ModuleList(self.fch)
         self.hdropout = th.nn.Dropout(self.hparams.hdropout)
         self.fc2 = th.nn.Linear(self.hparams.hfeat, 2)
 
@@ -80,9 +80,9 @@ class LitGNN(pl.LightningModule):
         h = self.conv1(g, h)
         h = self.conv2(g2, h)
         h = self.hdropout(F.elu(self.fc(h)))
-        # NO Hidden layers
-        """for _, hlayer in enumerate(self.hidden):
-            h = self.hdropout(F.elu(hlayer(h)))"""
+        # Hidden layers
+        for _, hlayer in enumerate(self.hidden):
+            h = self.hdropout(F.elu(hlayer(h)))
         h = self.fc2(h)
 
         return h, None  # Return two values for multitask training
@@ -155,7 +155,7 @@ class LitGNN(pl.LightningModule):
                 [
                     list(i.ndata["pred"].detach().cpu().numpy()),
                     list(i.ndata["_LABEL"].detach().cpu().numpy()),
-                    list(i.ndata["_LINE"].detach().cpu().numpy()),
+                    list(i.ndata["_IDS"].detach().cpu().numpy()),
                 ]
             )
 

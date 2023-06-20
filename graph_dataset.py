@@ -34,12 +34,7 @@ def ne_groupnodes(n, e):
 
 def feature_extraction(_id, graph_type="cfgcdg", return_nodes=False):
     """Extract graph feature (basic).
-
-    _id = svddc.BigVulDataset.itempath(177775)
-    _id = svddc.BigVulDataset.itempath(180189)
-    _id = svddc.BigVulDataset.itempath(178958)
-
-    return_nodes arg is used to get the node information (for empirical evaluation).
+    return_nodes arg is used to get the node information.
     """
     # Get CPG
     n, e = cnad.get_node_edges(_id)
@@ -67,8 +62,8 @@ def feature_extraction(_id, graph_type="cfgcdg", return_nodes=False):
     d = dict([(y, x) for x, y in enumerate(sorted(set(etypes)))])
     etypes = [d[i] for i in etypes]
 
-    # Append function name to code
-    if "+raw" not in graph_type:
+    # Don't Append function name to code
+    """if "+raw" not in graph_type:
         try:
             func_name = _id.split('.')[0] #n[n.lineNumber == 1].name.item()
         except Exception as E:
@@ -76,11 +71,19 @@ def feature_extraction(_id, graph_type="cfgcdg", return_nodes=False):
             func_name = ""
         n.code = func_name + " " + n.name + " " + "</s>" + " " + n.code
     else:
-        n.code = "</s>" + " " + n.code
+        n.code = "</s>" + " " + n.code"""
 
+    # Prepare attributes to return
     ntypes = n.typeFullName.tolist()
+    labels = n._label.tolist()
+    codes = n.code.tolist()
+    node_ids = n.id.tolist()
+    # line_nums = n.lineNumber.tolist() 
+    # node_labels = n.node_label.tolist()
+    in_nodes = e.innode.tolist()
+    out_nodes = e.outnode.tolist()
     # Return plain-text code, line number list, innodes, outnodes
-    return n.code.tolist(), n.id.tolist(), e.innode.tolist(), e.outnode.tolist(), ntypes, etypes
+    return codes, node_ids, in_nodes, out_nodes, ntypes, etypes, labels
 
 
 def chunks(lst, n):
@@ -120,7 +123,6 @@ class DglGraphDataset(pl.LightningDataModule):
             for filename in file_list:
                 g = self.create_or_load_graph(filename)
                 self.g_list.append(g)
-                # print(g)
             os.chdir(os.pardir)
         # Go back to the Project direcotry
         os.chdir(cnad.proj_dir)
@@ -128,9 +130,6 @@ class DglGraphDataset(pl.LightningDataModule):
         # Train Test Split
         self.train, self.test = train_test_split(self.g_list, test_size=0.1, shuffle=True)
         self.train, self.val = train_test_split(self.train, test_size=0.1, shuffle=True)
-        # print("\n\ng_train:", self.train)
-        # print("\n\ng_test:", self.test)
-        # print("\n\ng_val:", self.val, "\n\n")
 
         # Print # of datapoints
         print("\nDataset Summary")
@@ -148,22 +147,31 @@ class DglGraphDataset(pl.LightningDataModule):
         if os.path.exists(savedir):
             g = dgl.load_graphs(str(savedir))[0][0]
             return g
-
-        code, lineno, ei, eo, ntypes, etypes = feature_extraction(filename)
-        label = [1 if (n == 'int' or n == 'double' or n == 'float' or n == 'uint' or n == 'long')
-                 else 0 for n in ntypes]
+        class_labels = []
+        code, node_ids, ei, eo, ntypes, etypes, labels = feature_extraction(filename)
+        # Create Labels for Classification
+        for i in range(len(node_ids)):
+            node_type = ntypes[i]
+            _label = labels[i]
+            if (_label == 'IDENTIFIER' and node_type.find('undefined') != -1):
+                class_labels.append(0)
+            elif (_label == 'IDENTIFIER' and node_type == 'ANY'):
+                class_labels.append(0)
+            else:
+                class_labels.append(1)
         
         g = dgl.graph((eo, ei))
+        # printGraph(filename, g)
+        # printFeatures(code, node_ids, ei, eo, ntypes, etypes, labels, class_labels)
         code = [c.replace("\\t", "").replace("\\n", "") for c in code]
         chunked_batches = chunks(code, 128)
         features = [self.codebert.encode(c).detach().cpu() for c in chunked_batches]
         g.ndata["_CODEBERT"] = th.cat(features)
-        # g.ndata["_RANDFEAT"] = th.rand(size=(g.number_of_nodes(), 100))
-        g.ndata["_LINE"] = th.Tensor(lineno).int()
+        g.ndata["_IDS"] = th.Tensor(node_ids).int()
         g.ndata["_TYPE"] = th.Tensor(ntypes).int()
         g.edata["_ETYPE"] = th.Tensor(etypes).int()
         
-        g.ndata["_LABEL"] = th.Tensor(label).int()
+        g.ndata["_LABEL"] = th.Tensor(class_labels).int()
         g = dgl.add_self_loop(g)
         dgl.save_graphs(str(savedir), [g])
         return g
@@ -193,3 +201,21 @@ class DglGraphDataset(pl.LightningDataModule):
     def val_dataloader(self):
         """Return val dataloader."""
         return GraphDataLoader(self.val, batch_size=self.batch_size)
+
+
+def printGraph(file, g):
+    print('\nfor ', file,'->', g)
+    # print(g.ndata['_LABEL'])
+
+
+def printFeatures(code, node_ids, ei, eo, ntypes, etypes, labels, class_labels):
+    pd.set_option('display.max_rows', None)
+    nodes_df = pd.DataFrame(data=[code, node_ids, ntypes, labels, class_labels]).transpose()
+    nodes_df.columns = ['code', 'ID', 'typeFullName', '_label', 'class_label']
+    nodes_df.set_index('ID')
+    print('Nodes\n', nodes_df)
+
+    """edges_df = pd.DataFrame(data=[ei, eo, etypes]).transpose()
+    edges_df.columns = ['ei', 'eo', 'etypes']
+    print('Edges\n', edges_df)
+    """
