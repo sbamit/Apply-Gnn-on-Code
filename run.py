@@ -33,7 +33,7 @@ def main():
     # metrics = ["train_loss", "val_loss", "val_auroc"]
     # raytune_callback = TuneReportCallback(metrics, on="validation_end")
     # rtckpt_callback = TuneReportCheckpointCallback(metrics, on="validation_end")
-    max_epochs = 10
+    max_epochs = 20
     savepath = os.curdir
     trainer = pl.Trainer(
         # gpus=1,

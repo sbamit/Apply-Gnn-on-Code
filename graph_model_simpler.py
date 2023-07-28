@@ -113,8 +113,8 @@ class LitGNN(pl.LightningModule):
         batch_losses = [x['train_loss'] for x in outputs]
         epoch_loss = th.stack(batch_losses).mean()   # Combine losses
         epoch_acc = sum([x['train_acc'] for x in outputs])/len(outputs)
-        print("\nTraining accuracy:", epoch_acc.numpy(), end='\t')
-        print("Training loss:", epoch_loss.detach().numpy(), end='\n\n')
+        print("\nTraining accuracy:", epoch_acc.cpu().numpy(), end='\t')
+        print("Training loss:", epoch_loss.detach().cpu().numpy(), end='\n\n')
         self.training_step_outputs.clear()  # free memory
 
     def validation_step(self, batch, batch_idx):
@@ -138,8 +138,8 @@ class LitGNN(pl.LightningModule):
         batch_losses = [x['val_loss'] for x in outputs]
         epoch_loss = th.stack(batch_losses).mean()   # Combine losses
         epoch_acc = sum([x['val_acc'] for x in outputs])/len(outputs)
-        print("\nValidation accuracy : ", epoch_acc.numpy(), end='\t')
-        print("Validation loss : ", epoch_loss.numpy(), end='\n\n')
+        print("\nValidation accuracy : ", epoch_acc.cpu().numpy(), end='\t')
+        print("Validation loss : ", epoch_loss.cpu().numpy(), end='\n\n')
         self.validation_step_outputs.clear()  # free memory
 
     def test_step(self, batch, batch_idx):
@@ -173,8 +173,8 @@ class LitGNN(pl.LightningModule):
         batch_losses = [x['test_loss'] for x in outputs]
         epoch_loss = th.stack(batch_losses).mean()   # Combine losses
         epoch_acc = sum([x['test_acc'] for x in outputs])/len(outputs)
-        print("\nTest accuracy : ", epoch_acc.numpy(), end='\t')
-        print("Test loss : ", epoch_loss.numpy(), end='\n\n')
+        print("\nTest accuracy : ", epoch_acc.cpu().numpy(), end='\t')
+        print("Test loss : ", epoch_loss.cpu().numpy(), end='\n\n')
         self.test_step_outputs.clear()  # free memory
 
     def plot_pr_curve(self):
