@@ -14,9 +14,9 @@ Scripts have been tested and work on Ubuntu 20.04 with CUDA 11.8
 Working with the DIRT dataset:
   1. We are working with the DIRT dataset provided by this github repository: https://github.com/CMUSTRUDEL/DIRTY
   2. To download the dataset, follow these steps.
-      a. cd dirty/
-      b. wget cmu-itl.s3.amazonaws.com/dirty/dirt.tar.gz -O dirt.tar.gz
-      c. tar -xzf dirt.tar.gz
+      1. cd dirty/
+      2. b. wget cmu-itl.s3.amazonaws.com/dirty/dirt.tar.gz -O dirt.tar.gz
+      3. c. tar -xzf dirt.tar.gz
   3. Then run the xxx scripts to create the .C files for each of the functions in the dataset.
   4. After that, follow the steps described below.
 
